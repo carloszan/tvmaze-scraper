@@ -1,34 +1,61 @@
-﻿using System.Net.Http;
+﻿using Polly;
+using System.Net;
 
 namespace TvMaze.Scraper.Services
 {
-    public class TvMazeAPI
+    public class TvMazeApi : ITvMazeApi
     {
-        private readonly ILogger<TvMazeAPI> _logger;
-        private readonly HttpClient _httpClient;
+        public const string ClientName = "TvMazeApi";
+        private readonly ILogger<TvMazeApi> _logger;
+        private readonly IHttpClientFactory _httpClientFactory;
 
-        public TvMazeAPI(
-            ILogger<TvMazeAPI> logger,
-            HttpClient httpClient)
+        public TvMazeApi(
+            ILogger<TvMazeApi> logger,
+            IHttpClientFactory httpClientFactory)
         {
             _logger = logger;
-            _httpClient = httpClient;
+            _httpClientFactory = httpClientFactory;
         }
 
         public async Task<int> GetLastShowPage()
         {
-            int lastPage = 0;
-            var tasks = new List<Task>();
+            var client = _httpClientFactory.CreateClient(ClientName);
+            var semaphoreSlim = new SemaphoreSlim(1, 1); // Max concurrent requests = 1
+            var rateLimitPolicy = Policy
+                .Handle<HttpRequestException>()
+                .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(10));
 
-            for (var i = lastPage; i < 500; i++)
+            // Get last page somewhere
+            int lastPage = 280;
+
+            var tasks = new List<Task>();
+            HttpStatusCode statusCode = HttpStatusCode.OK;
+
+            int page = lastPage;
+            while (statusCode == HttpStatusCode.OK)
             {
-                tasks.Add(Task.Run(() =>
+                await rateLimitPolicy.ExecuteAsync(async () =>
                 {
-                    var page = i;
-                    lastPage = Math.Max(lastPage, page);
-                }));
-            }
-            await Task.WhenAll(tasks);
+                    await semaphoreSlim.WaitAsync();
+
+                    try
+                    {
+                        var response = await client.GetAsync($"/shows?page={page}");
+                        statusCode = response.StatusCode;
+
+                        if (statusCode == HttpStatusCode.OK)
+                        {
+                            lastPage = page;
+                        }
+                    }
+                    finally
+                    {
+                        semaphoreSlim.Release();
+                    }
+                });
+
+            page += 1;
+        }
 
             return lastPage;
         }
