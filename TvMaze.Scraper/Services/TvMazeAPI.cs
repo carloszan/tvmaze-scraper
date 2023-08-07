@@ -19,10 +19,10 @@ namespace TvMaze.Scraper.Services
         {
             _logger = logger;
             _httpClientFactory = httpClientFactory;
-            _db = new List<ShowDto>();
+            _db = new List<ShowDto>(100_000);
         }
 
-        public async Task<int> GetLastShowPage()
+        public async Task<List<ShowDto>> GetShows(int startPage = 0, int totalPages = 0)
         {
             var httpClient = _httpClientFactory.CreateClient(ClientName);
             int concurrentRequests = Environment.ProcessorCount;
@@ -31,11 +31,9 @@ namespace TvMaze.Scraper.Services
             var semaphoreSlim = new SemaphoreSlim(maxRequestsPerSecond, maxRequestsPerSecond);
 
             // Get last page somewhere
-            var lastPage = 280;
-            int totalPages = 300;
 
             var tasks = new Task[concurrentRequests];
-            for (int pageIndex = lastPage; pageIndex < totalPages; pageIndex += concurrentRequests)
+            for (int pageIndex = startPage; pageIndex < totalPages; pageIndex += concurrentRequests)
             {
                 for (int i = 0; i < concurrentRequests; i++)
                 {
@@ -53,12 +51,11 @@ namespace TvMaze.Scraper.Services
             }
 
 
-            var showDto = _db
-                .OrderByDescending(x => x.Id)
-                .FirstOrDefault() ?? throw new Exception("Can't get any shows...");
+            return _db
+                .OrderBy(x => x.Id)
+                .ToList() ?? throw new Exception("Can't get any shows...");
 
-            lastPage = (showDto.Id / 250) + 1;
-            return lastPage;
+            //return showsDto;
         }
 
         private async Task GetPageAsync(HttpClient httpClient, string page, SemaphoreSlim semaphoreSlim)

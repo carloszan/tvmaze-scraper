@@ -20,9 +20,9 @@ namespace TvMaze.Scraper
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
-             var page = await _tvMazeApi.GetLastShowPage();
+             var showsDto = await _tvMazeApi.GetShows(0, 300);
 
-            _logger.LogInformation($"Last page is {page}");
+            _logger.LogInformation($"We've got {showsDto.Count} shows.");
 
             _hostLifetime.StopApplication();
         }

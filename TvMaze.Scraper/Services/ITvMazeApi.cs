@@ -1,7 +1,9 @@
-﻿namespace TvMaze.Scraper.Services
+﻿using TvMaze.Scraper.Services.Dtos;
+
+namespace TvMaze.Scraper.Services
 {
     public interface ITvMazeApi
     {
-        Task<int> GetLastShowPage();
+        Task<List<ShowDto>> GetShows(int startPage = 0, int totalPages = 0);
     }
 }
