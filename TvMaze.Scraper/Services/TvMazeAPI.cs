@@ -55,11 +55,7 @@ namespace TvMaze.Scraper.Services
 
             var showDto = _db
                 .OrderByDescending(x => x.Id)
-                .FirstOrDefault();
-            if (showDto == null)
-            {
-                return -1;
-            }
+                .FirstOrDefault() ?? throw new Exception("Can't get any shows...");
 
             lastPage = (showDto.Id / 250) + 1;
             return lastPage;
@@ -69,17 +65,17 @@ namespace TvMaze.Scraper.Services
         {
             try
             {
-                //var showsDto = await httpClient.GetFromJsonAsync<List<ShowDto>>($"/shows?page={page}");
-                var showsDto = await httpClient.GetFromJsonAsync<List<ShowDto>>($"/429");
+                var showsDto = await httpClient.GetFromJsonAsync<List<ShowDto>>($"/shows?page={page}");
+                //var showsDto = await httpClient.GetFromJsonAsync<List<ShowDto>>($"/429");
 
                 if (showsDto != null)
                 {
                     _db.AddRange(showsDto);
                 }
-
             }
             catch(HttpRequestException e)
             {
+                _logger.LogWarning($"Http Response: {e.StatusCode}");
             }
             finally
             {

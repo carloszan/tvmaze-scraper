@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Hosting;
 using System.Threading;
 using TvMaze.Scraper.Services;
 
@@ -7,23 +8,23 @@ namespace TvMaze.Scraper
     {
         private readonly ILogger<Worker> _logger;
         private readonly ITvMazeApi _tvMazeApi;
+        private readonly IHostApplicationLifetime _hostLifetime;
 
-        public Worker(ILogger<Worker> logger, ITvMazeApi tvMazeApi)
+
+        public Worker(ILogger<Worker> logger, ITvMazeApi tvMazeApi, IHostApplicationLifetime hostLifetime)
         {
             _logger = logger;
             _tvMazeApi = tvMazeApi;
+            _hostLifetime = hostLifetime;
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
-            if (cancellationToken.IsCancellationRequested)
-            {
-                return;
-            }
-
-            var page = await _tvMazeApi.GetLastShowPage();
+             var page = await _tvMazeApi.GetLastShowPage();
 
             _logger.LogInformation($"Last page is {page}");
+
+            _hostLifetime.StopApplication();
         }
 
         public Task StopAsync(CancellationToken cancellationToken)

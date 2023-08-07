@@ -19,8 +19,8 @@ IHost host = Host.CreateDefaultBuilder(args)
 
         services.AddHttpClient("TvMazeApi", client =>
         {
-            //client.BaseAddress = new Uri("https://api.tvmaze.com");
-            client.BaseAddress = new Uri("https://httpstat.us");
+            client.BaseAddress = new Uri("https://api.tvmaze.com");
+            //client.BaseAddress = new Uri("https://httpstat.us");
         })
         .AddPolicyHandler(GetRetryPolicy());
 
