@@ -3,7 +3,7 @@ using TvMaze.Scraper.Services;
 
 namespace TvMaze.Scraper
 {
-    public class Worker : BackgroundService
+    public class Worker : IHostedService
     {
         private readonly ILogger<Worker> _logger;
         private readonly ITvMazeApi _tvMazeApi;
@@ -14,16 +14,22 @@ namespace TvMaze.Scraper
             _tvMazeApi = tvMazeApi;
         }
 
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        public async Task StartAsync(CancellationToken cancellationToken)
         {
-            if (stoppingToken.IsCancellationRequested)
+            if (cancellationToken.IsCancellationRequested)
             {
                 return;
             }
 
             var page = await _tvMazeApi.GetLastShowPage();
 
-            Console.WriteLine(page);
+            _logger.LogInformation($"Last page is {page}");
         }
+
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
     }
 }

@@ -1,20 +1,17 @@
 ﻿using Polly;
 using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using TvMaze.Scraper.Services.Dtos;
 
 namespace TvMaze.Scraper.Services
 {
-    class Response
-    {
-        public int Page { get; set; }
-        public HttpStatusCode Code { get; set; }
-    }
-
     public class TvMazeApi : ITvMazeApi
     {
         public const string ClientName = "TvMazeApi";
         private readonly ILogger<TvMazeApi> _logger;
         private readonly IHttpClientFactory _httpClientFactory;
-        private readonly List<Response> _db;
+        private readonly List<ShowDto> _db;
 
         public TvMazeApi(
             ILogger<TvMazeApi> logger,
@@ -22,7 +19,7 @@ namespace TvMaze.Scraper.Services
         {
             _logger = logger;
             _httpClientFactory = httpClientFactory;
-            _db = new List<Response>();
+            _db = new List<ShowDto>();
         }
 
         public async Task<int> GetLastShowPage()
@@ -34,7 +31,7 @@ namespace TvMaze.Scraper.Services
             var semaphoreSlim = new SemaphoreSlim(maxRequestsPerSecond, maxRequestsPerSecond);
 
             // Get last page somewhere
-            var lastPage = 0;
+            var lastPage = 280;
             int totalPages = 300;
 
             var tasks = new Task[concurrentRequests];
@@ -51,34 +48,43 @@ namespace TvMaze.Scraper.Services
                     tasks[i] = GetPageAsync(httpClient, $"{currentPage}", semaphoreSlim);
                 }
 
+                tasks = tasks.Where(task => task != null).ToArray();
                 await Task.WhenAll(tasks);
             }
 
 
-            lastPage = _db
-                .OrderByDescending(x => x.Page)
-                .FirstOrDefault().Page;
+            var showDto = _db
+                .OrderByDescending(x => x.Id)
+                .FirstOrDefault();
+            if (showDto == null)
+            {
+                return -1;
+            }
+
+            lastPage = (showDto.Id / 250) + 1;
             return lastPage;
         }
 
         private async Task GetPageAsync(HttpClient httpClient, string page, SemaphoreSlim semaphoreSlim)
         {
-            var retryPolicy = Policy
-                .Handle<HttpRequestException>()
-                .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(10));
-
-            await retryPolicy.ExecuteAsync(async () => 
+            try
             {
-                var response = await httpClient.GetAsync($"/shows?page={page}");
+                //var showsDto = await httpClient.GetFromJsonAsync<List<ShowDto>>($"/shows?page={page}");
+                var showsDto = await httpClient.GetFromJsonAsync<List<ShowDto>>($"/429");
 
-                if (response.StatusCode == HttpStatusCode.OK)
+                if (showsDto != null)
                 {
-                    _db.Add(new Response { Page = Convert.ToInt32(page), Code = response.StatusCode });
+                    _db.AddRange(showsDto);
                 }
 
+            }
+            catch(HttpRequestException e)
+            {
+            }
+            finally
+            {
                 semaphoreSlim.Release();
-            });
-            
+            }
         }
     }
 }
