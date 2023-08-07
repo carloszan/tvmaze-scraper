@@ -3,11 +3,18 @@ using System.Net;
 
 namespace TvMaze.Scraper.Services
 {
+    class Response
+    {
+        public int Page { get; set; }
+        public HttpStatusCode Code { get; set; }
+    }
+
     public class TvMazeApi : ITvMazeApi
     {
         public const string ClientName = "TvMazeApi";
         private readonly ILogger<TvMazeApi> _logger;
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly List<Response> _db;
 
         public TvMazeApi(
             ILogger<TvMazeApi> logger,
@@ -15,49 +22,63 @@ namespace TvMaze.Scraper.Services
         {
             _logger = logger;
             _httpClientFactory = httpClientFactory;
+            _db = new List<Response>();
         }
 
         public async Task<int> GetLastShowPage()
         {
-            var client = _httpClientFactory.CreateClient(ClientName);
-            var semaphoreSlim = new SemaphoreSlim(1, 1); // Max concurrent requests = 1
-            var rateLimitPolicy = Policy
+            var httpClient = _httpClientFactory.CreateClient(ClientName);
+            int concurrentRequests = Environment.ProcessorCount;
+            int maxRequestsPerSecond = 10;
+
+            var semaphoreSlim = new SemaphoreSlim(maxRequestsPerSecond, maxRequestsPerSecond);
+
+            // Get last page somewhere
+            var lastPage = 0;
+            int totalPages = 300;
+
+            var tasks = new Task[concurrentRequests];
+            for (int pageIndex = lastPage; pageIndex < totalPages; pageIndex += concurrentRequests)
+            {
+                for (int i = 0; i < concurrentRequests; i++)
+                {
+                    int currentPage = pageIndex + i;
+                    if (currentPage >= totalPages)
+                        break;
+
+                    await semaphoreSlim.WaitAsync();
+
+                    tasks[i] = GetPageAsync(httpClient, $"{currentPage}", semaphoreSlim);
+                }
+
+                await Task.WhenAll(tasks);
+            }
+
+
+            lastPage = _db
+                .OrderByDescending(x => x.Page)
+                .FirstOrDefault().Page;
+            return lastPage;
+        }
+
+        private async Task GetPageAsync(HttpClient httpClient, string page, SemaphoreSlim semaphoreSlim)
+        {
+            var retryPolicy = Policy
                 .Handle<HttpRequestException>()
                 .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(10));
 
-            // Get last page somewhere
-            int lastPage = 280;
-
-            var tasks = new List<Task>();
-            HttpStatusCode statusCode = HttpStatusCode.OK;
-
-            int page = lastPage;
-            while (statusCode == HttpStatusCode.OK)
+            await retryPolicy.ExecuteAsync(async () => 
             {
-                await rateLimitPolicy.ExecuteAsync(async () =>
+                var response = await httpClient.GetAsync($"/shows?page={page}");
+
+                if (response.StatusCode == HttpStatusCode.OK)
                 {
-                    await semaphoreSlim.WaitAsync();
+                    _db.Add(new Response { Page = Convert.ToInt32(page), Code = response.StatusCode });
+                }
 
-                    try
-                    {
-                        var response = await client.GetAsync($"/shows?page={page}");
-                        statusCode = response.StatusCode;
-
-                        if (statusCode == HttpStatusCode.OK)
-                        {
-                            lastPage = page;
-                        }
-                    }
-                    finally
-                    {
-                        semaphoreSlim.Release();
-                    }
-                });
-
-            page += 1;
-        }
-
-            return lastPage;
+                semaphoreSlim.Release();
+            });
+            
         }
     }
 }
