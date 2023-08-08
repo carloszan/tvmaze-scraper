@@ -30,8 +30,6 @@ namespace TvMaze.Scraper.Services
 
             var semaphoreSlim = new SemaphoreSlim(maxRequestsPerSecond, maxRequestsPerSecond);
 
-            // Get last page somewhere
-
             var tasks = new Task[concurrentRequests];
             for (int pageIndex = startPage; pageIndex < totalPages; pageIndex += concurrentRequests)
             {

@@ -1,3 +1,4 @@
+using TvMaze.Scraper.Repositories;
 using TvMaze.Scraper.Services;
 
 namespace TvMaze.Scraper
@@ -8,14 +9,21 @@ namespace TvMaze.Scraper
         private readonly ITvMazeApi _tvMazeApi;
         private readonly IHostApplicationLifetime _hostLifetime;
         private readonly IConfiguration _configuration;
+        private readonly ICache _cache;
 
 
-        public Worker(ILogger<Worker> logger, ITvMazeApi tvMazeApi, IHostApplicationLifetime hostLifetime, IConfiguration configuration)
+        public Worker(
+            ILogger<Worker> logger,
+            ITvMazeApi tvMazeApi,
+            IHostApplicationLifetime hostLifetime,
+            IConfiguration configuration,
+            ICache cache)
         {
             _logger = logger;
             _tvMazeApi = tvMazeApi;
             _hostLifetime = hostLifetime;
             _configuration = configuration;
+            _cache = cache;
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
@@ -27,11 +35,10 @@ namespace TvMaze.Scraper
                 throw new ArgumentNullException(nameof(settings));
             }
 
-            // Get this value from Redis.
-            var firstPage = 0;
+            var firstPage = await _cache.GetAsync("FIRST_PAGE");
             var lastPage = settings.LastPageToScrape;
 
-            var showsDto = await _tvMazeApi.GetShows(firstPage, lastPage);
+            var showsDto = await _tvMazeApi.GetShows(Convert.ToInt32(firstPage), lastPage);
 
             _logger.LogInformation($"We've got {showsDto.Count} shows.");
 
