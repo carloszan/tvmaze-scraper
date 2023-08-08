@@ -15,6 +15,7 @@ static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
 IHost host = Host.CreateDefaultBuilder(args)
     .ConfigureServices(services =>
     {
+        services.AddOptions();
         services.AddHostedService<Worker>();
 
         services.AddHttpClient("TvMazeApi", client =>

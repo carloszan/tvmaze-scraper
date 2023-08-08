@@ -54,8 +54,6 @@ namespace TvMaze.Scraper.Services
             return _db
                 .OrderBy(x => x.Id)
                 .ToList() ?? throw new Exception("Can't get any shows...");
-
-            //return showsDto;
         }
 
         private async Task GetPageAsync(HttpClient httpClient, string page, SemaphoreSlim semaphoreSlim)
