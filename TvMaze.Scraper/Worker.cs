@@ -27,7 +27,7 @@ namespace TvMaze.Scraper
                 throw new ArgumentNullException(nameof(settings));
             }
 
-            // Get this value somewhere
+            // Get this value from Redis.
             var firstPage = 0;
             var lastPage = settings.LastPageToScrape;
 
