@@ -1,7 +1,4 @@
-﻿using Polly;
-using System.Net;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using TvMaze.Scraper.Services.Dtos;
 
 namespace TvMaze.Scraper.Services
@@ -22,12 +19,18 @@ namespace TvMaze.Scraper.Services
             _db = new List<ShowDto>(100_000);
         }
 
-        public async Task<List<ShowDto>> GetShows(int startPage = 0, int totalPages = 0)
+        /// <summary>
+        /// Return all shows from TvMazeApi
+        /// </summary>
+        /// <param name="startPage">First page to look up</param>
+        /// <param name="totalPages">Last page to look up</param>
+        /// <param name="concurrentRequests">Concurrent requests</param>
+        /// <param name="maxRequestsPerSecond">Max requests per second</param>
+        /// <returns></returns>
+        /// <exception cref="Exception">Exception is throw if any show was found</exception>
+        public async Task<List<ShowDto>> GetShows(int startPage = 0, int totalPages = 0, int concurrentRequests = 1, int maxRequestsPerSecond = 10)
         {
             var httpClient = _httpClientFactory.CreateClient(ClientName);
-            int concurrentRequests = Environment.ProcessorCount;
-            int maxRequestsPerSecond = 10;
-
             var semaphoreSlim = new SemaphoreSlim(maxRequestsPerSecond, maxRequestsPerSecond);
 
             var tasks = new Task[concurrentRequests];
@@ -48,10 +51,24 @@ namespace TvMaze.Scraper.Services
                 await Task.WhenAll(tasks);
             }
 
-
             return _db
                 .OrderBy(x => x.Id)
                 .ToList() ?? throw new Exception("Can't get any shows...");
+        }
+
+        public async Task<List<CastDto>> GetCast(int showId)
+        {
+            var httpClient = _httpClientFactory.CreateClient(ClientName);
+            try 
+            {
+                var cast = await httpClient.GetFromJsonAsync<List<CastDto>>($"/shows/{showId}/cast");
+                return cast ?? throw new Exception($"Couldn't get casts from show id {showId}");
+            }
+            catch(HttpRequestException e)
+            {
+                _logger.LogWarning($"Http Response: {e.StatusCode}");
+            }
+            return new List<CastDto>();
         }
 
         private async Task GetPageAsync(HttpClient httpClient, string page, SemaphoreSlim semaphoreSlim)
@@ -59,7 +76,6 @@ namespace TvMaze.Scraper.Services
             try
             {
                 var showsDto = await httpClient.GetFromJsonAsync<List<ShowDto>>($"/shows?page={page}");
-                //var showsDto = await httpClient.GetFromJsonAsync<List<ShowDto>>($"/429");
 
                 if (showsDto != null)
                 {

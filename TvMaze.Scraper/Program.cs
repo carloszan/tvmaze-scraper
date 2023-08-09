@@ -10,7 +10,7 @@ static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
     return HttpPolicyExtensions
         .HandleTransientHttpError()
         .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
-        .WaitAndRetryAsync(1, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2,
+        .WaitAndRetryAsync(6, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2,
                                                                     retryAttempt)));
 }
 
