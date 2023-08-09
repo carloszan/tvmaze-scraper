@@ -9,6 +9,7 @@ namespace TvMaze.Scraper.Services
         private readonly ILogger<TvMazeApi> _logger;
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly List<ShowDto> _db;
+        private int _lastPage = -1;
 
         public TvMazeApi(
             ILogger<TvMazeApi> logger,
@@ -19,16 +20,7 @@ namespace TvMaze.Scraper.Services
             _db = new List<ShowDto>(100_000);
         }
 
-        /// <summary>
-        /// Return all shows from TvMazeApi
-        /// </summary>
-        /// <param name="startPage">First page to look up</param>
-        /// <param name="totalPages">Last page to look up</param>
-        /// <param name="concurrentRequests">Concurrent requests</param>
-        /// <param name="maxRequestsPerSecond">Max requests per second</param>
-        /// <returns></returns>
-        /// <exception cref="Exception">Exception is throw if any show was found</exception>
-        public async Task<List<ShowDto>> GetShows(int startPage = 0, int totalPages = 0, int concurrentRequests = 1, int maxRequestsPerSecond = 10)
+        public async Task<TvMazeApiGetShowsDto> GetShows(int startPage = 0, int totalPages = 0, int concurrentRequests = 1, int maxRequestsPerSecond = 10)
         {
             var httpClient = _httpClientFactory.CreateClient(ClientName);
             var semaphoreSlim = new SemaphoreSlim(maxRequestsPerSecond, maxRequestsPerSecond);
@@ -44,16 +36,23 @@ namespace TvMaze.Scraper.Services
 
                     await semaphoreSlim.WaitAsync();
 
-                    tasks[i] = GetPageAsync(httpClient, $"{currentPage}", semaphoreSlim);
+                    tasks[i] = GetPageAsync(httpClient, currentPage, semaphoreSlim);
                 }
 
                 tasks = tasks.Where(task => task != null).ToArray();
                 await Task.WhenAll(tasks);
             }
 
-            return _db
+            var pages = _lastPage;
+            var value = _db
                 .OrderBy(x => x.Id)
                 .ToList() ?? throw new Exception("Can't get any shows...");
+
+            return new TvMazeApiGetShowsDto
+            {
+                Pages = pages,
+                Value = value
+            };
         }
 
         public async Task<List<CastDto>> GetCast(int showId)
@@ -71,7 +70,7 @@ namespace TvMaze.Scraper.Services
             return new List<CastDto>();
         }
 
-        private async Task GetPageAsync(HttpClient httpClient, string page, SemaphoreSlim semaphoreSlim)
+        private async Task GetPageAsync(HttpClient httpClient, int page, SemaphoreSlim semaphoreSlim)
         {
             try
             {
@@ -79,6 +78,7 @@ namespace TvMaze.Scraper.Services
 
                 if (showsDto != null)
                 {
+                    _lastPage = Math.Max(_lastPage, page);
                     _db.AddRange(showsDto);
                 }
             }

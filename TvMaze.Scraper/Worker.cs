@@ -60,7 +60,8 @@ namespace TvMaze.Scraper
             var lastPage = settings.LastPageToScrape;
 
             _logger.LogInformation("Looking for shows...");
-            var showsDto = await _tvMazeApi.GetShows(firstPage, lastPage, Environment.ProcessorCount, 10);
+            var tvMazeApiResult = await _tvMazeApi.GetShows(firstPage, lastPage, Environment.ProcessorCount, 10);
+            var showsDto = tvMazeApiResult.Value;
             _logger.LogInformation($"We've got {showsDto.Count} shows.");
 
             
@@ -82,6 +83,11 @@ namespace TvMaze.Scraper
             });
 
             _logger.LogInformation("All casts were loaded...");
+
+            _logger.LogInformation("Saving last page in the cache database...");
+            var newFirstPage = tvMazeApiResult.Pages;
+            await _cache.SetAsync("FIRST_PAGE", newFirstPage.ToString());
+            _logger.LogInformation("Last page saved...");
 
 
             _hostLifetime.StopApplication();
