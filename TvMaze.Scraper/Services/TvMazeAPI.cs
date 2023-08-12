@@ -45,6 +45,7 @@ namespace TvMaze.Scraper.Services
 
             var pages = _lastPage;
             var value = _db
+                .Where(x => x != null)
                 .OrderBy(x => x.Id)
                 .ToList() ?? throw new Exception("Can't get any shows...");
 

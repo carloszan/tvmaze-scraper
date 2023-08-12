@@ -31,6 +31,7 @@ namespace TvMaze.Scraper
         private readonly IHostApplicationLifetime _hostLifetime;
         private readonly IConfiguration _configuration;
         private readonly ICache _cache;
+        private int _maxRequestsPerSecond;
 
 
         public Worker(
@@ -45,6 +46,7 @@ namespace TvMaze.Scraper
             _hostLifetime = hostLifetime;
             _configuration = configuration;
             _cache = cache;
+            _maxRequestsPerSecond = 5;
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
@@ -69,10 +71,15 @@ namespace TvMaze.Scraper
 
             var shows = new List<Show>(100_000);
 
-            var options = new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = cancellationToken };
+            var semaphoreSlim = new SemaphoreSlim(_maxRequestsPerSecond, _maxRequestsPerSecond);
+
+            var options = new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount, CancellationToken = cancellationToken };
             await Parallel.ForEachAsync(showsDto, options, async (showDto, cancelattionToken) =>
             {
+                await semaphoreSlim.WaitAsync(cancelattionToken);
                 var castDto = await _tvMazeApi.GetCast(showDto.Id);
+                semaphoreSlim.Release();
+
                 var show = new Show(showDto.Id, showDto.Name);
                 var cast = castDto
                     .Select(c => new Cast { Id = c.Person.Id, Name = c.Person.Name, Birthday = c.Person.Birthday })

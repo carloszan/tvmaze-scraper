@@ -1,6 +1,7 @@
 using Polly;
 using Polly.Extensions.Http;
 using StackExchange.Redis;
+using System.Net.Http.Headers;
 using TvMaze.Scraper;
 using TvMaze.Scraper.Repositories;
 using TvMaze.Scraper.Services;
@@ -10,8 +11,7 @@ static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
     return HttpPolicyExtensions
         .HandleTransientHttpError()
         .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
-        .WaitAndRetryAsync(6, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2,
-                                                                    retryAttempt)));
+        .WaitAndRetryForeverAsync(retryAttempt => TimeSpan.FromSeconds(10));
 }
 
 var config = new ConfigurationBuilder()
@@ -28,7 +28,11 @@ IHost host = Host.CreateDefaultBuilder(args)
         services.AddHttpClient("TvMazeApi", client =>
         {
             client.BaseAddress = new Uri("https://api.tvmaze.com");
-            //client.BaseAddress = new Uri("https://httpstat.us");
+            var product = new ProductInfoHeaderValue("TvMazeScraperBot", "1.0");
+            var owner = new ProductInfoHeaderValue("(+https://czar.dev)");
+
+            client.DefaultRequestHeaders.UserAgent.Add(product);
+            client.DefaultRequestHeaders.UserAgent.Add(owner);
         })
         .AddPolicyHandler(GetRetryPolicy());
 
