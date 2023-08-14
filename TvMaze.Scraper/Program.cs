@@ -1,3 +1,4 @@
+using MongoDB.Driver;
 using Polly;
 using Polly.Extensions.Http;
 using StackExchange.Redis;
@@ -12,6 +13,23 @@ static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
         .HandleTransientHttpError()
         .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
         .WaitAndRetryForeverAsync(retryAttempt => TimeSpan.FromSeconds(10));
+}
+static void AddRedis(IServiceCollection services, IConfigurationRoot config)
+{
+    var redisSettings = config.GetSection(nameof(RedisDbSettings)).Get<RedisDbSettings>();
+    redisSettings ??= new RedisDbSettings();
+
+    var multiplexer = ConnectionMultiplexer.Connect(redisSettings.ConnectionString);
+    services.AddSingleton<IConnectionMultiplexer>(multiplexer);
+}
+
+static void AddMongoDb(IServiceCollection services, IConfigurationRoot config)
+{
+    var mongoDbSettings = config.GetSection(nameof(MongoDbSettings)).Get<MongoDbSettings>();
+    mongoDbSettings ??= new MongoDbSettings();
+
+    MongoClient mongoClient = new(mongoDbSettings.ConnectionString);
+    services.AddSingleton<IMongoClient>(mongoClient);
 }
 
 var config = new ConfigurationBuilder()
@@ -38,16 +56,12 @@ IHost host = Host.CreateDefaultBuilder(args)
 
         services.AddTransient<ITvMazeApi, TvMazeApi>();
         services.AddTransient<ICache, RedisCacheDb>();
+        services.AddTransient<IShowRepository, ShowRepository>();
 
-        var redisSettings = config.GetSection(nameof(RedisDbSettings)).Get<RedisDbSettings>();
-        if (redisSettings == null)
-        {
-            redisSettings = new RedisDbSettings();
-        }
-
-        var multiplexer = ConnectionMultiplexer.Connect(redisSettings.ConnectionString);
-        services.AddSingleton<IConnectionMultiplexer>(multiplexer);
+        AddRedis(services, config);
+        AddMongoDb(services, config);
     })
     .Build();
 
 host.Run();
+

@@ -1,29 +1,9 @@
+using TvMaze.Scraper.Entities;
 using TvMaze.Scraper.Repositories;
 using TvMaze.Scraper.Services;
 
 namespace TvMaze.Scraper
 {
-    class Cast
-    {
-        public required int Id { get; set; }
-        public required string Name { get; set; }
-        public required string Birthday { get; set; }
-    }
-
-    class Show
-    {
-        public Show(int id, string? name)
-        {
-            Id = id;
-            Name = name;
-        }
-
-        public int Id { get; set; }
-        public string? Name { get; set; }
-
-        public List<Cast> Cast { get; set; }
-    }
-
     public class Worker : IHostedService
     {
         private readonly ILogger<Worker> _logger;
@@ -31,6 +11,7 @@ namespace TvMaze.Scraper
         private readonly IHostApplicationLifetime _hostLifetime;
         private readonly IConfiguration _configuration;
         private readonly ICache _cache;
+        private readonly IShowRepository _showRepository;
         private int _maxRequestsPerSecond;
 
 
@@ -39,14 +20,16 @@ namespace TvMaze.Scraper
             ITvMazeApi tvMazeApi,
             IHostApplicationLifetime hostLifetime,
             IConfiguration configuration,
-            ICache cache)
+            ICache cache,
+            IShowRepository showRepository)
         {
             _logger = logger;
             _tvMazeApi = tvMazeApi;
             _hostLifetime = hostLifetime;
             _configuration = configuration;
             _cache = cache;
-            _maxRequestsPerSecond = 5;
+            _showRepository = showRepository;
+            _maxRequestsPerSecond = 2;
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
@@ -69,7 +52,7 @@ namespace TvMaze.Scraper
             
             _logger.LogInformation("Looking for casts...");
 
-            var shows = new List<Show>(100_000);
+            var shows = new List<ShowEntity>(100_000);
 
             var semaphoreSlim = new SemaphoreSlim(_maxRequestsPerSecond, _maxRequestsPerSecond);
 
@@ -80,9 +63,10 @@ namespace TvMaze.Scraper
                 var castDto = await _tvMazeApi.GetCast(showDto.Id);
                 semaphoreSlim.Release();
 
-                var show = new Show(showDto.Id, showDto.Name);
+                var show = new ShowEntity(showDto.Id, showDto.Name);
                 var cast = castDto
                     .Select(c => new Cast { Id = c.Person.Id, Name = c.Person.Name, Birthday = c.Person.Birthday })
+                    .OrderByDescending(c => c.Birthday)
                     .ToList();
                 show.Cast = cast;
 
@@ -95,6 +79,11 @@ namespace TvMaze.Scraper
             var newFirstPage = tvMazeApiResult.Pages;
             await _cache.SetAsync("FIRST_PAGE", newFirstPage.ToString());
             _logger.LogInformation("Last page saved...");
+
+            _logger.LogInformation("Saving data to database...");
+            shows = shows.OrderBy(x => x.Id).ToList();
+            await _showRepository.InsertManyAsync(shows);
+            _logger.LogInformation("Data was saved...");
 
 
             _hostLifetime.StopApplication();
