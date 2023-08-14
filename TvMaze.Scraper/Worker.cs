@@ -82,7 +82,7 @@ namespace TvMaze.Scraper
 
             _logger.LogInformation("Saving data to database...");
             shows = shows.OrderBy(x => x.Id).ToList();
-            await _showRepository.InsertManyAsync(shows);
+            await _showRepository.UpsertManyAsync(shows);
             _logger.LogInformation("Data was saved...");
 
 

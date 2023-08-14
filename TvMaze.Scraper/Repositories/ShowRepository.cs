@@ -1,4 +1,5 @@
-﻿using MongoDB.Driver;
+﻿using MongoDB.Bson;
+using MongoDB.Driver;
 using TvMaze.Scraper.Entities;
 
 namespace TvMaze.Scraper.Repositories
@@ -19,11 +20,24 @@ namespace TvMaze.Scraper.Repositories
             _showCollection = database.GetCollection<ShowEntity>(collectionName);
         }
 
-        public async Task InsertManyAsync(List<ShowEntity> shows)
+        public async Task UpsertManyAsync(List<ShowEntity> shows)
         {
+            List<WriteModel<ShowEntity>> bulkOperations = new();
+
+            foreach (var document in shows)
+            {
+                var filter = Builders<ShowEntity>.Filter.Eq("_id", document.Id);
+                var update = Builders<ShowEntity>.Update
+                    .Set("Name", document.Name)
+                    .Set("Cast", document.Cast);
+                var upsertOne = new UpdateOneModel<ShowEntity>(filter, update) { IsUpsert = true };
+                bulkOperations.Add(upsertOne);
+            }
+
             try
             {
-                await _showCollection.InsertManyAsync(shows);
+                var bulkWriteOptions = new BulkWriteOptions { IsOrdered = true };
+                await _showCollection.BulkWriteAsync(bulkOperations, bulkWriteOptions);
             }
             catch(Exception ex) 
             {
